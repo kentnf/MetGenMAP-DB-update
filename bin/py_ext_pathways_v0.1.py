@@ -13,6 +13,7 @@ pathway_fn = 'pathways.dat'
 temp_dir = 'tmp'
 log_fn = 'log.txt'
 html_tags = ['<i>', '</i>', '<I>', '</I>', '<sup>', '</sup>', '<SUP>', '</SUP>', '<sub>', '</sub>', '<SUB>', '</SUB>']
+greek_alphabet = {'&alpha;':'alpha','&beta;':'beta','&delta;':'delta','&Delta;':'Delta','&gamma;':'gamma','&omega;':'omega','&epsilon;':'epsilon','&kappa;':'kappa','&iota;':'iota','&pi;':'pi','&tau;':'tau','&psi;':'psi','&lambda;':'lambda','&zeta;':'zeta'}
 
 ######## phtyon modules ########
 import sys, string, os, re
@@ -406,7 +407,7 @@ def load_pathways(filename):
 								else:
 									L = string.replace(L, '|', '')
 									if compound_list.has_key(L) == 1:
-										equ_right += L
+										equ_right += compound_list[L]
 									else:
 										error4 = 'Pathway: '+ pid+ ' Reaction: '+ rid+ ' Compound: '+ L+ ' is not found!!!!\n'
 										log_out.write(error4)
@@ -568,10 +569,15 @@ def remove_html_tag(texts):
 		texts = string.replace(texts, tag, '')
 	return texts
 	
+def replace_greek_alphabet(texts):
+	for ga in greek_alphabet:
+		texts = string.replace(texts, ga, greek_alphabet[ga])
+	return texts
+	
 def refine_pathway(filelist, dir_pname):
 
 	output_path = get_dirinfo(dir_pname)
-
+	
 	for k in range(len(filelist)):
 		reactions = ''
 		
@@ -583,6 +589,7 @@ def refine_pathway(filelist, dir_pname):
 		text_result = ext_subpathway(input_path, filelist[k], filelist[k], reactions)
 		text_result = remove_duplication(text_result)
 		text_result = remove_html_tag(text_result)
+		text_result = replace_greek_alphabet(text_result)
 
 		ofn = output_path + filelist[k]
 		print ofn
