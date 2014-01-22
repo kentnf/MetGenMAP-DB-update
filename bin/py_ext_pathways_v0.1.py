@@ -441,8 +441,8 @@ def load_pathways(filename):
 					pid = string.replace(pid, '/', '_')
 					output.write(pid)
 					output.write('\t')
-					output.write(rec_id)
-					output.write('\t')
+					#output.write(rec_id)
+					#output.write('\t')
 					output.write(reaction_enzyme)
 					output.write('\t')
 					if rec_equ_list.has_key(rec_id) == 1:
