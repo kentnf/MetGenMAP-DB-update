@@ -11,16 +11,22 @@ reaction_fn = 'reactions.dat'
 pathway_fn = 'pathways.dat'
 
 temp_dir = 'tmp'
+log_fn = 'log.txt'
+html_tags = ['<i>', '</i>', '<I>', '</I>', '<sup>', '</sup>', '<SUP>', '</SUP>', '<sub>', '</sub>', '<SUB>', '</SUB>']
 
 ######## phtyon modules ########
-import sys, string, os
+import sys, string, os, re
 
 ######## ID lists ########
 protein_list = {}
 enzyme_list = {}
+protein_enzyme_list = {}
 enzyme_name_list = {}
 compound_list = {}
 reaction_list = {}
+
+######### Making log file #########
+log_out = open(log_fn, 'w')
 
 ######## Loading datasets #######
 def load_enzyme(filename):
@@ -117,6 +123,7 @@ def load_proteins(filename_gene, filename_protein):
 	
 	input=open(filename_protein,'r')
 	pid = ''
+	common_name = ''
 	gid = []
 	for line in input.readlines():
 		list = string.split(line)
@@ -140,20 +147,39 @@ def load_proteins(filename_gene, filename_protein):
 					if gene_list.has_key(id) == 1:
 						id = gene_list[id]
 						gid.append(id)
+			elif idf == 'COMMON-NAME':
+				L = string.replace(line, 'COMMON-NAME - ', '')
+				L = string.split(L, '//')
+
+				if len(L) > 0:
+					L_0 = string.split(L[0])
+					if len(L_0) > 0:
+						for w in L_0:
+							if w[-1] == ',':
+								w = w[:-1]
+								common_name += w
+								break
+							else:
+								common_name += string.strip(w)
+								common_name += ' '
+						common_name = string.strip(common_name)
 			else:
 				pass
 		if line[:2] == '//':
 			if len(pid) > 0 and len(gid) > 0:
-				#print pid, '\t', gid 
 				protein_list[pid] = gid
-
+				protein_enzyme_list[pid] = common_name
+				#print pid, '\t', gid 
+				#print pid, '\t', common_name
 			pid = ''
+			common_name = ''
 			gid = []
 	input.close()
 	
 def load_enzyme_name(filename):
 	input=open(filename,'r')
 	cid = ''
+	eid = ''
 	cname = ''
 	for line in input.readlines():
 		list = string.split(line)
@@ -165,15 +191,29 @@ def load_enzyme_name(filename):
 				cid = id
 			elif idf == 'COMMON-NAME':
 				L = string.replace(line, 'COMMON-NAME - ', '')
-				L = string.strip(L)
-				cname = L
+				cname = string.strip(L)
+				L = string.split(L, '//')
+				if len(L) > 0:
+					cname = string.strip(L[0])
+
+			elif idf == 'ENZYME':
+				eid = id
 			else:
 				pass
 		if line[:2] == '//':
 			if len(cid) > 0 and len(cname) > 0:
 				enzyme_name_list[cid] = cname
-				#print cid, '\t', cname 
+			elif len(cid) > 0 and len(cname) <= 1:
+				if len(eid) > 0:
+					if protein_enzyme_list.has_key(eid) == 1:
+						cname = protein_enzyme_list[eid]
+						enzyme_name_list[cid] = cname
+			else:
+				enzyme_name_list[cid] = cname
+				
+			#print cid, '\t', cname
 			cid = ''
+			eid = ''
 			cname = ''
 	input.close()	
 	
@@ -280,6 +320,7 @@ def load_pathways(filename):
 	pid = ''
 	rec_count = 0
 
+	primaries_list = {}
 	rec_list = {}
 	rec_equ_list = {}
 	direction_list = {}
@@ -292,7 +333,7 @@ def load_pathways(filename):
 
 			if idf == 'UNIQUE-ID':
 				pid = id
-
+				
 			elif idf == 'REACTION-LAYOUT':
 				rid = string.strip(id)
 				if rid[0] == '(':
@@ -317,11 +358,11 @@ def load_pathways(filename):
 						if L ==  '(:DIRECTION':
 							direction_flag = 1
 					
-					equ = ''
+					equ_left = ''
+					equ_right = ''
+					equ_pathway = ''
 					if list[3] == '(:LEFT-PRIMARIES)':
-						L = string.replace(list[2], '(', '')
-						equ += L 
-					
+						equ_pathway = string.replace(list[2], '(', '')
 					else:
 						equ_left_flag = 0
 						equ_right_flag = 0
@@ -331,43 +372,58 @@ def load_pathways(filename):
 									L = L[:-1]
 									L = string.replace(L, '|', '')
 									if compound_list.has_key(L) == 1:
-										equ += compound_list[L] 
+										equ_left += compound_list[L] 
 									else:
-										equ += ' ERROR '
+										error1 = 'Pathway: ' + pid+ ' Reaction: '+ rid+ ' Compound: '+ L+ ' is not found!\n'
+										log_out.write(error1)
+										L = string.replace(L, '"', '')
+										equ_left += L 
 									equ_left_flag = 0
 								else:
 									L = string.replace(L, '|', '')
 									if compound_list.has_key(L) == 1:
-										equ += compound_list[L]
+										equ_left += compound_list[L]
 									else:
-										equ += ' ERROR '
-									equ += ' + '
+										error2 = 'Pathway: '+ pid+ ' Reaction: '+rid+ ' Compound: '+ L+ ' is not found!!\n'
+										log_out.write(error2)
+										L = string.replace(L, '"', '')
+										equ_left += L
+										equ_left += ' ERROR '
+									equ_left += ' + '
 								
 							if equ_right_flag == 1:
-								equ += ' = '
 								if L[-1] == ')':
 									L = L[:-2]
 									L = string.replace(L, '|', '')
 									if compound_list.has_key(L) == 1:
-										equ += compound_list[L]
+										equ_right += compound_list[L]
 									else:
-										equ += '  ERROR ' 
+										error3 = 'Pathway: '+ pid+ ' Reaction: '+ rid+ ' Compound: '+ L+ ' is not found!!!\n'
+										log_out.write(error3)
+										L = string.replace(L, '"', '')
+										equ_right += L
 									equ_right_flag = 0
 								else:
 									L = string.replace(L, '|', '')
 									if compound_list.has_key(L) == 1:
-										equ += compound_list[L]
+										equ_right += L
 									else:
-										equ += '  ERROR '
-									equ += ' + '
+										error4 = 'Pathway: '+ pid+ ' Reaction: '+ rid+ ' Compound: '+ L+ ' is not found!!!!\n'
+										log_out.write(error4)
+										L = string.replace(L, '"', '')
+										equ_right += L
+									equ_right += ' + '
 
-							if L ==  '(:LEFT-PRIMARIES':
+							if L == '(:LEFT-PRIMARIES':
 								equ_left_flag = 1
-							if L ==  '(:RIGHT-PRIMARIES':
+							if L == '(:RIGHT-PRIMARIES':
 								equ_right_flag = 1
-					
-							
-					rec_equ_list[rid] = equ
+					if direction_list[rid] == 'R2L':		
+						rec_equ_list[rid] = equ_right + ' = ' + equ_left
+					elif direction_list[rid] == 'NIL':	
+						rec_equ_list[rid] = equ_pathway
+					else:
+						rec_equ_list[rid] = equ_left + ' = ' + equ_right
 
 		if line[:2] == '//':
 			ofile = pid
@@ -448,7 +504,11 @@ def load_pathways(filename):
 					if rec_equ_list.has_key(rec_id) == 1:
 						output.write(rec_equ_list[rec_id])
 					else:
-						output.write(' ERROR')
+						error5 = 'Pathway: '+ pid+ ' Reaction: '+ rec_id + ' is not found!!!!\n' 
+						log_out.write(error5)
+						print 'Error!!!!'
+						print 'Pleas check log file!!!!'
+						sys.exit()
 					output.write('\t')
 					g_count = 1
 					for g in gene_list:
@@ -463,8 +523,11 @@ def load_pathways(filename):
 
 			pid = ''
 			rec_count = 0
+			primaries_list = {}			
 			rec_list = {}
+			rec_equ_list = {}
 			direction_list = {}
+			
 	input.close()
 	print 'The number of fils: ', file_count
 	return path_file_list
@@ -490,7 +553,7 @@ def ext_subpathway(ipath, fn, mp, texts):
 
 	return texts
 
-def remove_red(texts):
+def remove_duplication(texts):
 	dic = {}
 	reactions = ''
 	list = string.split(texts, '\n')
@@ -499,6 +562,11 @@ def remove_red(texts):
 			dic[L] = 1
 			reactions = reactions+L+'\n'
 	return reactions
+	
+def remove_html_tag(texts):
+	for tag in html_tags:
+		texts = string.replace(texts, tag, '')
+	return texts
 	
 def refine_pathway(filelist, dir_pname):
 
@@ -513,7 +581,8 @@ def refine_pathway(filelist, dir_pname):
 		else:
 			input_path = './'+temp_dir+'/'
 		text_result = ext_subpathway(input_path, filelist[k], filelist[k], reactions)
-		text_result = remove_red(text_result)
+		text_result = remove_duplication(text_result)
+		text_result = remove_html_tag(text_result)
 
 		ofn = output_path + filelist[k]
 		print ofn
@@ -537,3 +606,4 @@ if __name__ == '__main__':
 	load_datasets() # loading datasets
 	file_list = load_pathways(pathway_fn)  # building pathway 
 	refine_pathway(file_list, path_name)   # refine pathways
+	log_out.close()
